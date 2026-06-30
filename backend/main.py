@@ -1,6 +1,7 @@
 import os
 from datetime import date, timedelta
 
+from agents import Agent, Runner, function_tool
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,7 +55,9 @@ def build_available_slots():
     return slots
 
 
-def check_available_slots():
+@function_tool
+def check_available_slots() -> str:
+    """Check which appointment slots are still available."""
     available_slots = build_available_slots()
 
     booked_pairs = [
@@ -78,7 +81,9 @@ def check_available_slots():
     return f"Available slots: {slot_text}"
 
 
-def book_appointment(customer_name, appointment_date, appointment_time):
+@function_tool
+def book_appointment(customer_name: str, appointment_date: str, appointment_time: str) -> str:
+    """Book an appointment using the customer's name, date, and time."""
     available_slots = build_available_slots()
 
     is_valid_slot = any(
@@ -107,7 +112,9 @@ def book_appointment(customer_name, appointment_date, appointment_time):
     return f"Booked appointment for {customer_name} on {appointment_date} at {appointment_time}."
 
 
-def list_booked_appointments():
+@function_tool
+def list_booked_appointments() -> str:
+    """List all currently booked appointments."""
     if not booked_appointments:
         return "There are no booked appointments yet."
 
@@ -117,6 +124,22 @@ def list_booked_appointments():
     )
 
     return f"Booked appointments: {appointment_text}"
+
+
+booking_agent = Agent(
+    name="Appointment Booking Assistant",
+    instructions=(
+        "You are a friendly appointment booking assistant. "
+        "Help the user check available slots, book appointments, and list booked appointments. "
+        "Before booking, collect the customer's name, appointment date, and appointment time. "
+        "Use the tools whenever the user asks about availability or bookings."
+    ),
+    tools=[
+        check_available_slots,
+        book_appointment,
+        list_booked_appointments,
+    ],
+)
 
 
 @app.get("/")
@@ -132,16 +155,8 @@ async def chat(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    message = request.message.lower()
-
-    if "available" in message or "slot" in message:
-        reply = check_available_slots()
-    elif "booked" in message or "appointments" in message:
-        reply = list_booked_appointments()
-    else:
-        reply = (
-            "Booking logic is working. Ask me for available slots. "
-            "The AI Agent will understand natural booking requests in the next step."
-        )
-
-    return ChatResponse(reply=reply)
+    try:
+        result = await Runner.run(booking_agent, request.message)
+        return ChatResponse(reply=result.final_output)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=str(error))
