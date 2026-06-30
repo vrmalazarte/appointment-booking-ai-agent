@@ -1,8 +1,9 @@
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -19,9 +20,27 @@ app.add_middleware(
 )
 
 
+class ChatRequest(BaseModel):
+    message: str
+
+
+class ChatResponse(BaseModel):
+    reply: str
+
+
 @app.get("/")
 def health_check():
     return {
         "status": "ok",
         "message": "Appointment Booking AI Agent API is running.",
     }
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+
+    return ChatResponse(
+        reply="Backend chat endpoint is working. The AI Agent will be connected next."
+    )
