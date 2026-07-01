@@ -18,7 +18,7 @@ export default function Home() {
 
   const [input, setInput] = useState("");
 
-  function sendMessage(event: FormEvent<HTMLFormElement>) {
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const userMessage = input.trim();
@@ -27,20 +27,45 @@ export default function Home() {
       return;
     }
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        role: "user",
-        content: userMessage,
-      },
-      {
-        role: "assistant",
-        content:
-          "Frontend is working. Later, this reply will come from the AI Agent backend.",
-      },
-    ]);
+   setMessages((currentMessages) => [
+  ...currentMessages,
+  {
+    role: "user",
+    content: userMessage,
+  },
+]);
 
-    setInput("");
+setInput("");
+
+try {
+  const response = await fetch("http://localhost:8000/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: userMessage,
+    }),
+  });
+
+  const data = await response.json();
+
+  setMessages((currentMessages) => [
+    ...currentMessages,
+    {
+      role: "assistant",
+      content: data.reply,
+    },
+  ]);
+} catch (error) {
+  setMessages((currentMessages) => [
+    ...currentMessages,
+    {
+      role: "assistant",
+      content: "Something went wrong. Please try again.",
+    },
+  ]);
+}
   }
 
   return (

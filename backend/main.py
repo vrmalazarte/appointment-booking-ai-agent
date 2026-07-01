@@ -6,12 +6,26 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from supabase import create_client, Client
 
 load_dotenv()
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError(
+        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
+    )
+
 app = FastAPI(title="Appointment Booking AI Agent")
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +46,29 @@ class ChatResponse(BaseModel):
 
 booked_appointments = []
 
+def save_appointment(customer_name: str, appointment_date: str, appointment_time: str):
+    """Save an appointment to Supabase."""
+
+    try:
+        response = (
+            supabase.table("appointments")
+            .insert(
+                {
+                    "customer_name": customer_name,
+                    "appointment_date": appointment_date,
+                    "appointment_time": appointment_time,
+                }
+            )
+            .execute()
+        )
+
+        print("Supabase response:", response)
+
+        return response
+
+    except Exception as error:
+        print("Supabase error:", error)
+        raise
 
 def build_available_slots():
     times = ["09:00", "10:30", "14:00", "15:30"]
@@ -80,7 +117,6 @@ def check_available_slots() -> str:
 
     return f"Available slots: {slot_text}"
 
-
 @function_tool
 def book_appointment(customer_name: str, appointment_date: str, appointment_time: str) -> str:
     """Book an appointment using the customer's name, date, and time."""
@@ -101,16 +137,13 @@ def book_appointment(customer_name: str, appointment_date: str, appointment_time
         if same_date and same_time:
             return f"Sorry, {appointment_date} at {appointment_time} is already booked."
 
-    booked_appointments.append(
-        {
-            "customer_name": customer_name,
-            "date": appointment_date,
-            "time": appointment_time,
-        }
+    save_appointment(
+        customer_name,
+        appointment_date,
+        appointment_time,
     )
 
     return f"Booked appointment for {customer_name} on {appointment_date} at {appointment_time}."
-
 
 @function_tool
 def list_booked_appointments() -> str:
