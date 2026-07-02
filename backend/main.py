@@ -45,8 +45,6 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-booked_appointments = []
-
 def save_appointment(customer_name: str, appointment_date: str, appointment_time: str):
     """Save an appointment to Supabase."""
 
@@ -66,6 +64,16 @@ def save_appointment(customer_name: str, appointment_date: str, appointment_time
 
     return response
 
+def get_booked_appointments():
+    """Retrieve all booked appointments from Supabase."""
+
+    response = (
+        supabase.table("appointments")
+        .select("*")
+        .execute()
+    )
+
+    return response.data
 
 def build_available_slots():
     times = ["09:00", "10:30", "14:00", "15:30"]
@@ -93,9 +101,10 @@ def build_available_slots():
 def check_available_slots() -> str:
     """Check which appointment slots are still available."""
     available_slots = build_available_slots()
+    booked_appointments = get_booked_appointments()
 
     booked_pairs = [
-        (appointment["date"], appointment["time"])
+        (appointment["appointment_date"], appointment["appointment_time"])
         for appointment in booked_appointments
     ]
 
@@ -128,9 +137,11 @@ def book_appointment(customer_name: str, appointment_date: str, appointment_time
     if not is_valid_slot:
         return "That slot is not available. Please ask me to show available slots."
 
+    booked_appointments = get_booked_appointments()
+
     for appointment in booked_appointments:
-        same_date = appointment["date"] == appointment_date
-        same_time = appointment["time"] == appointment_time
+        same_date = appointment["appointment_date"] == appointment_date
+        same_time = appointment["appointment_time"] == appointment_time
 
         if same_date and same_time:
             return f"Sorry, {appointment_date} at {appointment_time} is already booked."
@@ -147,11 +158,14 @@ def book_appointment(customer_name: str, appointment_date: str, appointment_time
 @function_tool
 def list_booked_appointments() -> str:
     """List all currently booked appointments."""
+
+    booked_appointments = get_booked_appointments()
+
     if not booked_appointments:
         return "There are no booked appointments yet."
 
     appointment_text = "; ".join(
-        f"{appointment['customer_name']} on {appointment['date']} at {appointment['time']}"
+        f"{appointment['customer_name']} on {appointment['appointment_date']} at {appointment['appointment_time']}"
         for appointment in booked_appointments
     )
 
