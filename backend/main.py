@@ -1,7 +1,7 @@
 import os
 from datetime import date, timedelta
-
 from agents import Agent, Runner, function_tool
+from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,10 +14,11 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or not DATABASE_URL:
     raise RuntimeError(
-        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
+        "SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and DATABASE_URL must be set."
     )
 
 app = FastAPI(title="Appointment Booking AI Agent")
@@ -49,26 +50,22 @@ booked_appointments = []
 def save_appointment(customer_name: str, appointment_date: str, appointment_time: str):
     """Save an appointment to Supabase."""
 
-    try:
-        response = (
-            supabase.table("appointments")
-            .insert(
-                {
-                    "customer_name": customer_name,
-                    "appointment_date": appointment_date,
-                    "appointment_time": appointment_time,
-                }
-            )
-            .execute()
+    response = (
+        supabase.table("appointments")
+        .insert(
+            {
+                "customer_name": customer_name,
+                "appointment_date": appointment_date,
+                "appointment_time": appointment_time,
+            }
         )
+        .execute()
+    )
 
-        print("Supabase response:", response)
+    print("Supabase response:", response)
 
-        return response
+    return response
 
-    except Exception as error:
-        print("Supabase error:", error)
-        raise
 
 def build_available_slots():
     times = ["09:00", "10:30", "14:00", "15:30"]
@@ -117,6 +114,7 @@ def check_available_slots() -> str:
 
     return f"Available slots: {slot_text}"
 
+
 @function_tool
 def book_appointment(customer_name: str, appointment_date: str, appointment_time: str) -> str:
     """Book an appointment using the customer's name, date, and time."""
@@ -145,6 +143,7 @@ def book_appointment(customer_name: str, appointment_date: str, appointment_time
 
     return f"Booked appointment for {customer_name} on {appointment_date} at {appointment_time}."
 
+
 @function_tool
 def list_booked_appointments() -> str:
     """List all currently booked appointments."""
@@ -158,6 +157,12 @@ def list_booked_appointments() -> str:
 
     return f"Booked appointments: {appointment_text}"
 
+
+session = SQLAlchemySession.from_url(
+    session_id="default",
+    url=DATABASE_URL,
+    create_tables=True,
+)
 
 booking_agent = Agent(
     name="Appointment Booking Assistant",
@@ -189,7 +194,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     try:
-        result = await Runner.run(booking_agent, request.message)
+        result = await Runner.run(booking_agent, request.message, session=session)
         return ChatResponse(reply=result.final_output)
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error))
