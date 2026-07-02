@@ -18,6 +18,8 @@ export default function Home() {
 
   const [input, setInput] = useState("");
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -38,7 +40,7 @@ export default function Home() {
 setInput("");
 
 try {
-  const response = await fetch("http://localhost:8000/chat", {
+  const response = await fetch(`${API_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
